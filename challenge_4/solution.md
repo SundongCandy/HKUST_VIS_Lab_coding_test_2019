@@ -110,7 +110,7 @@
    continent = 'NA'
    result = getTracks(continent)
    ```
-   Below is the result:
+   Below is the result:  
    ![image5.jpg](image5.jpg)
    
    For "Europe":
@@ -118,7 +118,7 @@
    continent = 'EU'
    result = getTracks(continent)
    ```
-   Below is the result:
+   Below is the result:  
    ![image6.jpg](image6.jpg)
    
    For "Asia":
@@ -126,7 +126,7 @@
    continent = 'AS'
    result = getTracks(continent)
    ```
-   Below is the result:
+   Below is the result:  
    ![image7.jpg](image7.jpg)
    
    For "South America":
@@ -134,7 +134,7 @@
    continent = 'SA'
    result = getTracks(continent)
    ```
-   Below is the result:
+   Below is the result:  
    ![image8.jpg](image8.jpg)
    
    For "Oceania":
@@ -142,7 +142,7 @@
    continent = 'OC'
    result = getTracks(continent)
    ```
-   Below is the result:
+   Below is the result:  
    ![image9.jpg](image9.jpg)
 
 6. Q4: plot
@@ -168,5 +168,5 @@
    df.plot(x='Datetime', y='Streams')
    ```
    
-   The result:
+   The result:  
    ![image10.jpg](image10.jpg)
