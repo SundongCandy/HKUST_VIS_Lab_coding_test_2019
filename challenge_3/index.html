@@ -1,0 +1,425 @@
+<!DOCTYPE html>
+<meta charset="utf-8">
+
+<style>
+    .links line {
+        stroke: #bdbdbd;
+        stroke-opacity: 1.0;
+    }
+
+    .nodes circle {
+        stroke: #f0f0f0;
+        stroke-width: 1px;
+    }
+
+    text {
+        font-family: sans-serif;
+        font-size: 10px;
+    }
+
+    .zeroRect {
+        stroke: #d9d9d9;
+        stroke-width: 1px;
+    }
+
+    .nonZeroRect {
+        stroke: #66c2a5;
+        stroke-width: 1px;
+    }
+</style>
+
+<body>
+    <script src="https://d3js.org/d3.v4.min.js"></script>
+
+    <script>
+        var margin = {top: 20, right: 20, bottom: 30, left: 80},
+            width = 960 - margin.left - margin.right,
+            height = 800 - margin.top - margin.bottom;
+
+        var svg = d3.select("body").append("svg")
+            .attr("width", width + margin.left + margin.right + 500)
+            .attr("height", height + margin.top + margin.bottom)
+            .append("g")
+            .attr("transform", "translate(" + margin.left + "," + margin.top + ")");
+        
+        var color = d3.scaleOrdinal(d3.schemeCategory20);
+
+        var simulation = d3.forceSimulation()
+            .force("link", d3.forceLink().id(function(d) { return d.id; }))
+            .force("charge", d3.forceManyBody().strength(-30))
+            .force("center", d3.forceCenter(width / 4, height / 2));
+
+        d3.json("HKUST_coauthor_graph.json", function(error, data) {
+            if (error) throw error;
+
+            var nodeData = data.nodes.filter(function(d) {
+                return d.dept === 'CSE';
+            })
+
+            var edgeData = data.edges.filter(function(d) {
+                var sourceInNode = false;
+                var targetInNode = false;
+
+                for(let i = 0; i < nodeData.length; i++) {
+                    if (nodeData[i].id === d.source) {
+                        sourceInNode = true;
+                    }
+                    if (nodeData[i].id === d.target) {
+                        targetInNode = true;
+                    }
+                }
+
+                return sourceInNode && targetInNode;
+
+            })
+
+            nodeData.forEach(function(d) {
+                d.collaboratorNumber = 0;
+                for (let i = 0; i < edgeData.length; i++) {
+                    var currentEdge = edgeData[i];
+                    if (currentEdge.source === d.id || currentEdge.target === d.id) {
+                        d.collaboratorNumber++;
+                    }
+                }
+            })
+
+            console.log('nodeData:');
+            console.log(nodeData);
+
+            console.log('edgeData:');
+            console.log(edgeData);
+
+            var link = svg.append("g")
+                .attr("class", "links")
+                .selectAll("line")
+                .data(edgeData)
+                .enter().append("line")
+                .attr("stroke-width", 2);
+
+            var node = svg.append("g")
+                .attr("class", "nodes")
+                .selectAll("g")
+                .data(nodeData)
+                .enter().append("g")
+
+            var circles = node.append("circle")
+                .attr("r", function(d) {
+                    return d.collaboratorNumber * 0.5 + 3;
+                })
+                .attr("fill", "#fc8d62")
+
+            var dragHandler = d3.drag()
+                .on("start", dragstarted)
+                .on("drag", dragged)
+                .on("end", dragended)
+
+            dragHandler(node);
+
+            // var lables = node.append("text")
+            //     .text(function(d) {
+            //     return d.fullname;
+            //     })
+            //     .attr('x', 6)
+            //     .attr('y', 3);
+
+            node.append("title")
+                .text(function(d) { return d.fullname; });
+
+            simulation
+                .nodes(nodeData)
+                .on("tick", ticked);
+
+            simulation.force("link")
+                .links(edgeData);
+
+            function ticked() {
+            link
+                .attr("x1", function(d) { return d.source.x; })
+                .attr("y1", function(d) { return d.source.y; })
+                .attr("x2", function(d) { return d.target.x; })
+                .attr("y2", function(d) { return d.target.y; });
+
+            node
+                .attr("transform", function(d) {
+                  return "translate(" + d.x + "," + d.y + ")";
+                })
+            }
+
+            nodeData.sort(function(a, b) {
+                return b.collaboratorNumber - a.collaboratorNumber;
+            })
+
+            for (let i = 0; i < nodeData.length; i++) {
+                nodeData[i].row = i;
+                nodeData[i].column = i;
+            }
+
+            console.log('reordered nodeData:')
+            console.log(nodeData);
+            console.log('edge data:')
+            console.log(edgeData);
+
+            var matrixData = []
+            var maxPublicationNumber = 0
+
+            for (let i = 0; i < nodeData.length; i++) {
+                for (let j = 0; j < nodeData.length; j++) {
+                    let cellData = {}
+                    cellData.row = i;
+                    cellData.column = j;
+                    cellData.publicationNumber = 0;
+                    
+                    if (i !== j) {
+                        for (let k = 0; k < edgeData.length; k++) {
+                            let currentEdgeData = edgeData[k]
+
+                            if ((currentEdgeData.source === nodeData[i] && currentEdgeData.target === nodeData[j])
+                                || (currentEdgeData.source === nodeData[j] && currentEdgeData.target === nodeData[i])) {
+                                cellData.publicationNumber = currentEdgeData.publications.length;
+                                if (maxPublicationNumber < currentEdgeData.publications.length) {
+                                    maxPublicationNumber = currentEdgeData.publications.length;
+                                }
+                                break;
+                            }
+                        }
+                    }
+                    matrixData.push(cellData);
+                }
+            }
+            console.log('matrixData:');
+            console.log(matrixData);
+            console.log('maxPublicationNumber: ' + maxPublicationNumber);
+
+            var rectWidth = 8;
+            var rectHeight = 8;
+            var matrixMargin = {top: 200, left: 80};
+
+            var whiteColor = d3.rgb('#ffffff');
+            var yellowColor = d3.rgb('#ff7f00');
+            var computeColor = d3.interpolate(whiteColor, yellowColor);
+
+            var linearColor = d3.scaleLinear()
+                    .domain([0, maxPublicationNumber])
+                    .range([0, 1])
+
+            var matrixView = svg.append('g')
+                .attr('class', 'matrix_view')
+                .attr('transform', 'translate(' + (width / 2 + matrixMargin.left) + ', ' + matrixMargin.top + ')');
+
+            var rectGroup = matrixView.append('g')
+                .attr('class', 'rect_group');
+
+            var rect = rectGroup.selectAll('rect')
+                .data(matrixData)
+                .enter().append('rect')
+                .attr('class', function(d) {
+                    if (d.publicationNumber > 0) {
+                        return 'nonZeroRect';
+                    } else {
+                        return 'zeroRect';
+                    }
+                })
+                .attr('width', rectWidth)
+                .attr('height', rectHeight)
+                .attr('x', function(d) {
+                    return d.column * (rectWidth + 1);
+                })
+                .attr('y', function(d) {
+                    return d.row * (rectHeight + 1);
+                })
+                .attr('fill', function(d) {
+                    return computeColor(linearColor(d.publicationNumber));
+                })
+
+            var horizontalTextGroup = matrixView.append('g')
+                .attr('class', 'horizontal_text_group')
+
+            var horizontalText = horizontalTextGroup.selectAll('text')
+                .data(nodeData)
+                .enter().append('text')
+                .style('fill', '#000000')
+                .attr('font-size', 10)
+                .attr('transform', function (d) {
+                    let x = d.column * (rectWidth + 1);
+                    let y = 0;
+                    let rotate = -90;
+
+                    return 'translate(' + x + ', ' + y + ') rotate(' + rotate + ')'
+                })
+                .attr('dx', function(d) {
+                    return 3;
+                })
+                .attr('dy', function (d) {
+                    return 7;
+                })
+                .attr('text-anchor', 'start')
+                .text(function (d) {
+                    return d.fullname;
+                })
+
+            var verticalTextGroup = matrixView.append('g')
+                .attr('class', 'vertical_text_group')
+
+            var verticalText = verticalTextGroup.selectAll('text')
+                .data(nodeData)
+                .enter().append('text')
+                .style('fill', '#000000')
+                .attr('font-size', 10)
+                .attr('transform', function (d) {
+                    let x = 0;
+                    let y = d.row * (rectHeight + 1);
+
+                    return 'translate(' + x + ', ' + y + ')'
+                })
+                .attr('dx', function(d) {
+                    return -3;
+                })
+                .attr('dy', function (d) {
+                    return 7;
+                })
+                .attr('text-anchor', 'end')
+                .text(function (d) {
+                    return d.fullname;
+                })
+
+            var gradientLegendGroup = matrixView.append('g')
+                .attr('class', 'gradient_legend_group')
+
+            var gradientLegend = gradientLegendGroup.append('defs')
+                .append('linearGradient')
+                .attr('id', 'gradient_legend')
+                .attr('x1', '0%') // bottom
+                .attr('y1', '100%')
+                .attr('x2', '0%') // to top
+                .attr('y2', '0%')
+                .attr('spreadMethod', 'pad')
+
+            gradientLegend.append('stop')
+                .attr('offset', '0%')
+                .attr('stop-color', whiteColor)
+                .attr('stop-opacity', 1)
+
+            gradientLegend.append('stop')
+                .attr('offset', '100%')
+                .attr('stop-color', yellowColor)
+                .attr('stop-opacity', 1)
+
+            gradientLegend.append('stop')
+                .attr('offset', '100%')
+                .attr('stop-opacity', 1)
+
+            gradientLegendGroup.append('rect')
+                .attr('width', 12)
+                .attr('height', 100)
+                .style('fill', 'url(#gradient_legend)')
+                .attr('transform', 'translate(430, 0)')
+
+            var gradientLegendScale = d3.scaleLinear()
+                .domain([0, maxPublicationNumber])
+                .range([100, 0])
+
+            var gradientLegendAxis = d3.axisRight()
+                .scale(gradientLegendScale)
+                .ticks(6)
+
+            gradientLegendGroup.append('g')
+                .attr('class', 'gradient legend axis')
+                .attr('transform', 'translate(442, 0)')
+                .call(gradientLegendAxis)
+                .append('text')
+                .attr('transform', 'rotate(-90)')
+                .attr('y', 0)
+                .attr('dy', '.71em')
+                .style('text-anchor', 'end')
+                .text('axis title')
+
+            rect.on('mouseover', function(d) {
+                let node1 = nodeData[d.row];
+                let node2 = nodeData[d.column];
+
+                // highlight the nodes
+                node.filter(function(dd) {
+                    return (dd.id !== node1.id && dd.id !== node2.id);
+                })
+                    .style('opacity', '0.2');
+
+                // highlight the link
+                link.filter(function(dd) {
+                    let result = (dd.source === node1 && dd.target === node2) || (dd.source === node2 && dd.target === node1);
+                    return !result;
+                })
+                    .style('opacity', '0.2')
+
+                link.filter(function(dd) {
+                    let result = (dd.source === node1 && dd.target === node2) || (dd.source === node2 && dd.target === node1);
+                    return result;
+                })
+                    .style('stroke', '#fc8d62')
+                
+                // highlight the matrix
+                rect.filter(function(dd) {
+                	return !(dd.row === d.row || dd.column === d.column)
+                })
+                	.style('opacity', '0.2')
+            })
+            .on('mouseout', function(d) {
+                node.style('opacity', '1.0');
+                link.style('opacity', '1.0')
+                    .style('stroke', '#bdbdbd');
+                rect.style('opacity', '1.0');
+            })
+
+            node.on('mouseover', function(d) {
+                let node1 = nodeData[d.row];
+
+                // highlight the nodes
+                node.filter(function(dd) {
+                    return (dd.id !== node1.id);
+                })
+                    .style('opacity', '0.2');
+
+                // highlight the link
+                link.filter(function(dd) {
+                    let result = (dd.source === node1) || (dd.target === node1);
+                    return !result;
+                })
+                    .style('opacity', '0.2')
+
+                link.filter(function(dd) {
+                    let result = (dd.source === node1) || (dd.target === node1);
+                    return result;
+                })
+                    .style('stroke', '#fc8d62')
+                
+                // highlight the matrix
+                rect.filter(function(dd) {
+                	return !(dd.row === d.row || dd.column === d.column)
+                })
+                	.style('opacity', '0.2')
+            })
+            .on('mouseout', function(d) {
+                node.style('opacity', '1.0');
+                link.style('opacity', '1.0')
+                    .style('stroke', '#bdbdbd');
+                rect.style('opacity', '1.0');
+            })
+        });
+
+        function dragstarted(d) {
+            if (!d3.event.active) simulation.alphaTarget(0.3).restart();
+            d.fx = d.x;
+            d.fy = d.y;
+        }
+
+        function dragged(d) {
+            d.fx = d3.event.x;
+            d.fy = d3.event.y;
+        }
+
+        function dragended(d) {
+            if (!d3.event.active) simulation.alphaTarget(0);
+            d.fx = null;
+            d.fy = null;
+        }
+    </script>
+</body>

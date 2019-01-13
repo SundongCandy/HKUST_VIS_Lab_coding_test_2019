@@ -1,0 +1,390 @@
+<!DOCTYPE html>
+<meta charset="utf-8">
+
+<style>
+    .tooltip {
+        background-color: #fff;
+        border: 2px solid #ccc;
+        border-radius: 8px;
+        padding: 10px;
+    }
+
+    .line {
+        fill: none;
+        stroke: #984ea3;
+        stroke-width: 1px;
+    }
+
+    .line2 {
+        fill: none;
+        stroke: #1b9e77;
+        stroke-width: 1px;
+    }
+
+</style>
+
+<body>   	
+
+    <script src="//d3js.org/d3.v4.min.js"></script>
+
+    <script>
+
+    var margin = {top: 20, right: 20, bottom: 30, left: 80},
+        width = 960 - margin.left - margin.right,
+        height = 960 - margin.top - margin.bottom;
+    
+    var padding = 0.1;
+    var yearNumber = 10;
+    var monthNumber = 12;
+    var indicator = -1; // -1: min, 1: max
+
+    var rectWidth = 38;
+    var rectHeight = 32;
+
+    var years = d3.range(1997, 2007);
+    var months = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
+
+    var x = d3.scaleBand()
+        .range([0, 500])
+        .paddingInner(padding);
+
+    var y = d3.scaleBand()
+        .range([0, 500])
+        .paddingInner(padding);
+            
+    var svg = d3.select("body").append("svg")
+        .attr("width", width + margin.left + margin.right)
+        .attr("height", height + margin.top + margin.bottom)
+        .append("g")
+        .attr("transform", "translate(" + margin.left + "," + margin.top + ")");
+
+    var tooltip = d3.select('body')
+        .append('div')
+        .attr('class', 'tooltip')
+        .style('position', 'absolute')
+        .style('z-index', '10')
+        .style('visibility', 'hidden')
+        .text('a simple tooltip')
+
+    d3.csv("temperature_daily.csv", function(error, data) {
+        if (error) throw error;
+
+        data.forEach(function(d) {
+            d.min_temperature = parseFloat(d.min_temperature);
+            d.max_temperature = parseFloat(d.max_temperature);
+        });
+
+        console.log('data:');
+        console.log(data);
+
+        var cellData = []
+        for (let i = 0; i < 10; i++) {
+            for (let j = 0; j < 12; j++) {
+                let singleCell = {}
+                singleCell.year = i + 1997;
+                singleCell.month = j + 1;
+                singleCell.max = -100;
+                singleCell.min = 100;
+                singleCell.data = [];
+                cellData.push(singleCell);
+            }
+        }
+
+        for (let i = 0; i < data.length; i++) {
+            let date = data[i].date;
+            let year = parseInt(date.split('-')[0]);
+            let month = parseInt(date.split('-')[1]);
+            
+            if (cellData[(year - 1997) * 12 + (month - 1)].max < data[i].max_temperature) {
+                cellData[(year - 1997) * 12 + (month - 1)].max = data[i].max_temperature;
+            }
+            if (cellData[(year - 1997) * 12 + (month - 1)].min > data[i].min_temperature) {
+                cellData[(year - 1997) * 12 + (month - 1)].min = data[i].min_temperature;
+            }
+
+            cellData[(year - 1997) * 12 + (month - 1)].data.push(data[i]);
+        }
+
+        console.log('cellData:');
+        console.log(cellData);
+
+        var maxValue = -100;
+        var minValue = 100;
+        for (let i = 0; i < cellData.length; i++) {
+            if (maxValue < cellData[i].max) {
+                maxValue = cellData[i].max;
+            }
+            if (minValue > cellData[i].min) {
+                minValue = cellData[i].min;
+            }
+        }
+
+        var blueColor = d3.rgb('#1f78b4')
+        var yellowColor = d3.rgb('#ffffb3');
+        var redColor = d3.rgb('#e41a1c');
+
+        var computeColor = d3.interpolate(blueColor, yellowColor);
+        var computeColor2 = d3.interpolate(yellowColor, redColor);
+        var linearColor = d3.scaleLinear()
+                    .domain([0, 20])
+                    .range([0, 1])
+        var linearColor2 = d3.scaleLinear()
+                    .domain([20, 40])
+                    .range([0, 1])
+
+        x.domain(years);
+        y.domain(months);
+
+        // x axis
+        svg.append("g")
+            .call(d3.axisTop(x));
+
+        // y axis
+        svg.append("g")
+            .call(d3.axisLeft(y));
+
+        var rectGroup = svg.append('g')
+            .attr('class', 'rect_group')
+        
+        var rect = rectGroup.selectAll('rect')
+            .data(cellData)
+            .enter()
+            .append('rect')
+            .attr('width', rectWidth)
+            .attr('height', rectHeight)
+            .attr('x', function(d) {
+                return x(d.year) + 4;
+            })
+            .attr('y', function(d) {
+                var monthString = "";
+                switch(d.month) {
+                    case 1: monthString = "January"; break;
+                    case 2: monthString = "February"; break;
+                    case 3: monthString = "March"; break;
+                    case 4: monthString = "April"; break;
+                    case 5: monthString = "May"; break;
+                    case 6: monthString = "June"; break;
+                    case 7: monthString = "July"; break;
+                    case 8: monthString = "August"; break;
+                    case 9: monthString = "September"; break;
+                    case 10: monthString = "October"; break;
+                    case 11: monthString = "November"; break;
+                    case 12: monthString = "December"; break;
+                }
+                return y(monthString) + 3;
+            })
+            .style('fill', function(d) {
+                var checkValue = d.min;
+                if (checkValue < 20) {
+                    return computeColor(linearColor(checkValue));
+                } else {
+                    return computeColor2(linearColor2(checkValue));
+                }
+            });
+
+            rect.on('click', function(d) {
+                indicator = indicator * (-1);
+                // min
+                if (indicator == -1) {
+                    rect.style('fill', function(dd) {
+                        var checkValue = dd.min;
+                        if (checkValue < 20) {
+                            return computeColor(linearColor(checkValue));
+                        } else {
+                            return computeColor2(linearColor2(checkValue));
+                        }
+                    });
+                } else {
+                    rect.style('fill', function(dd) {
+                        var checkValue = dd.max;
+                        if (checkValue < 20) {
+                            return computeColor(linearColor(checkValue));
+                        } else {
+                            return computeColor2(linearColor2(checkValue));
+                        }
+                    });
+                }
+            });
+
+            rect.on('mousemove', function(d) {
+                tooltip.style('visibility', 'visible')
+                tooltip.transition()
+                    .duration(200)
+                    .style('opacity', 0.9);
+
+                var tooltipText = 'date: ' + d.year + '-'
+                if(d.month < 10) {
+                    tooltipText = tooltipText + '0' + d.month
+                } else {
+                    tooltipText = tooltipText + d.month
+                }
+                tooltipText = tooltipText + ', max: ' + d.max + ', min: ' + d.min;
+                tooltip.html(tooltipText)
+                    .style('left', (d3.event.pageX) + 20 + 'px')
+                    .style('top', (d3.event.pageY) - 10 + 'px');
+            })
+            .on('mouseout', function(d) {
+                tooltip.transition()
+                    .duration(500)
+                    .style('opacity', 0.0)
+                    .on('end', function () {
+                        tooltip.html('')
+                            .style('left', '900px')
+                            .style('top', '0px')
+                    })
+            });
+
+            var gradientLegendGroup = svg.append('g')
+                .attr('class', 'gradient_legend_group')
+
+            var gradientLegend = gradientLegendGroup.append('defs')
+                .append('linearGradient')
+                .attr('id', 'gradient_legend')
+                .attr('x1', '0%') // bottom
+                .attr('y1', '100%')
+                .attr('x2', '0%') // to top
+                .attr('y2', '0%')
+                .attr('spreadMethod', 'pad')
+
+            gradientLegend.append('stop')
+                .attr('offset', '0%')
+                .attr('stop-color', blueColor)
+                .attr('stop-opacity', 1)
+
+            gradientLegend.append('stop')
+                .attr('offset', '50%')
+                .attr('stop-color', yellowColor)
+                .attr('stop-opacity', 1)
+
+            gradientLegend.append('stop')
+                .attr('offset', '100%')
+                .attr('stop-color', redColor)
+                .attr('stop-opacity', 1)
+
+            gradientLegendGroup.append('rect')
+                .attr('width', 15)
+                .attr('height', 180)
+                .style('fill', 'url(#gradient_legend)')
+                .attr('transform', 'translate(520, 0)')
+
+            var gradientLegendScale = d3.scaleLinear()
+                .domain([0, 40])
+                .range([180, 0])
+
+            var gradientLegendAxis = d3.axisRight()
+                .scale(gradientLegendScale)
+                .ticks(6)
+
+            gradientLegendGroup.append('g')
+                .attr('class', 'gradient legend axis')
+                .attr('transform', 'translate(535, 0)')
+                .call(gradientLegendAxis)
+                .append('text')
+                .attr('transform', 'rotate(-90)')
+                .attr('y', 0)
+                .attr('dy', '.71em')
+                .style('text-anchor', 'end')
+                .text('axis title')
+        
+        // drawLineChart();
+
+        // function drawLineChart() {
+            var xLineChart = d3.scaleLinear().range([0, rectWidth]).domain([1, 31]);
+            var yLineChart = d3.scaleLinear().range([rectHeight, 0]).domain([0, 40]);
+
+            // define the line
+            var valueline = d3.line()
+                .x(function(d, i) {
+                    var day = parseInt(d.date.split('-')[2]);
+                    return xLineChart(day); 
+                })
+                .y(function(d) { return yLineChart(d.max_temperature); });
+
+            var valueline2 = d3.line()
+                .x(function(d) {
+                    var day = parseInt(d.date.split('-')[2]);
+                    return xLineChart(day); 
+                })
+                .y(function(d) { return yLineChart(d.min_temperature); });
+
+            var maxLineChartGroup = svg.append('g')
+                .attr('class', 'max_line_chart_group');
+
+            var maxLineChart = maxLineChartGroup.selectAll('g')
+                .data(cellData)
+                .enter()
+                .append('g')
+                .attr('transform', function(d) {
+                    var xPosition = x(d.year) + 4;
+                    var monthString = "";
+                    switch(d.month) {
+                        case 1: monthString = "January"; break;
+                        case 2: monthString = "February"; break;
+                        case 3: monthString = "March"; break;
+                        case 4: monthString = "April"; break;
+                        case 5: monthString = "May"; break;
+                        case 6: monthString = "June"; break;
+                        case 7: monthString = "July"; break;
+                        case 8: monthString = "August"; break;
+                        case 9: monthString = "September"; break;
+                        case 10: monthString = "October"; break;
+                        case 11: monthString = "November"; break;
+                        case 12: monthString = "December"; break;
+                    }
+                    var yPosition = y(monthString) + 3;
+                    return 'translate(' + xPosition + ', ' + yPosition + ')';
+                })
+            
+            var maxlineChart = maxLineChart.selectAll('path')
+                .data(function(d) {
+                    return [d.data];
+                })
+                .enter()
+                .append('path')
+                .attr("class", "line")
+                .attr("d", valueline)
+
+            var minLineChartGroup = svg.append('g')
+                .attr('class', 'min_line_chart_group');
+
+            var minLineChart = minLineChartGroup.selectAll('g')
+                .data(cellData)
+                .enter()
+                .append('g')
+                .attr('transform', function(d) {
+                    var xPosition = x(d.year) + 4;
+                    var monthString = "";
+                    switch(d.month) {
+                        case 1: monthString = "January"; break;
+                        case 2: monthString = "February"; break;
+                        case 3: monthString = "March"; break;
+                        case 4: monthString = "April"; break;
+                        case 5: monthString = "May"; break;
+                        case 6: monthString = "June"; break;
+                        case 7: monthString = "July"; break;
+                        case 8: monthString = "August"; break;
+                        case 9: monthString = "September"; break;
+                        case 10: monthString = "October"; break;
+                        case 11: monthString = "November"; break;
+                        case 12: monthString = "December"; break;
+                    }
+                    var yPosition = y(monthString) + 3;
+                    return 'translate(' + xPosition + ', ' + yPosition + ')';
+                })
+            
+            var minlineChart = minLineChart.selectAll('path')
+                .data(function(d) {
+                    return [d.data];
+                })
+                .enter()
+                .append('path')
+                .attr("class", "line2")
+                .attr("d", valueline2)
+                
+            
+        // }
+
+    });
+
+</script>
+</body>
